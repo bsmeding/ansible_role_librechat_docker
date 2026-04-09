@@ -34,28 +34,26 @@
           - librechat_container.container.State.Running | default(false)
         fail_msg: "LibreChat container is not running"
 
-    # Published ports bind on the Docker *daemon* host (runner). The Molecule instance
-    # only has the socket; 127.0.0.1 here is the container loopback — not where 3080 listens.
-    - name: Wait for LibreChat HTTP port (on Docker host)
-      ansible.builtin.wait_for:
-        host: "127.0.0.1"
-        port: "{{ librechat__port }}"
-        state: started
-        timeout: 120
-        delay: 5
-      delegate_to: localhost
-      become: false
-      vars:
-        ansible_connection: local
-
-    - name: Check LibreChat web UI responds (on Docker host)
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ librechat__port }}/"
-        method: GET
-      register: librechat_web
-      failed_when: librechat_web.status not in [200, 301, 302]
+    # Do not probe the published host port from the runner: Docker can accept TCP on
+    # localhost:3080 then reset HTTP (hairpin / proxy quirks). Hit the API from inside
+    # the LibreChat container instead (same network namespace as the Node process).
+    - name: Check LibreChat serves HTTP (inside API container)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - LibreChat
+          - node
+          - -e
+          - >-
+            const req = require('http').get(
+            'http://127.0.0.1:{{ librechat__port }}/',
+            (r) => { r.resume(); process.exit([200, 301, 302, 304].includes(r.statusCode) ? 0 : 1); }
+            );
+            req.on('error', () => process.exit(1));
+            req.setTimeout(15000, () => { req.destroy(); process.exit(1); });
+      register: librechat_http
       changed_when: false
-      delegate_to: localhost
-      become: false
-      vars:
-        ansible_connection: local
+      retries: 40
+      delay: 5
+      until: librechat_http.rc == 0
