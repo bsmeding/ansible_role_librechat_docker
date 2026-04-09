@@ -1,0 +1,21 @@
+---
+- name: Converge
+  hosts: all
+
+  vars:
+    librechat__port: 3080
+    librechat__meili_master_key: "molecule-test-meili-master-key-32chars"
+    librechat__pull_images: false  # Speed up test; image may already be present
+    librechat__remove_existing_home_dir: true  # Clean state for molecule
+
+  pre_tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 600
+      when: ansible_facts.os_family == 'Debian'
+      changed_when: false
+
+  roles:
+    - role: bsmeding.docker
+    - role: ../../  # Role under test (ansible_role_librechat_docker)

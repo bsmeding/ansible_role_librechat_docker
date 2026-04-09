@@ -1,0 +1,152 @@
+---
+# LibreChat - ChatGPT-style UI with multi-provider AI support (Docker Compose)
+# Source: https://github.com/danny-avila/LibreChat
+# Requires bsmeding.docker role (docker + docker-compose plugin).
+
+librechat__name: librechat
+librechat__home: "/opt/{{ librechat__name }}"
+
+# Port for the web UI
+librechat__port: 3080
+librechat__rag_port: 8000
+
+# Public URL users open in the browser (scheme + host + port), e.g. http://192.168.1.10:3080
+# If empty, DOMAIN_CLIENT / DOMAIN_SERVER stay http://localhost:{{ librechat__port }} — then Sign up only works when you open that exact URL.
+# Set this when you access LibreChat by IP or hostname so registration/login match (see README).
+librechat__public_url: ""
+
+# Docker Compose project name
+librechat__project_name: librechat
+
+# Images — RAG API is on GHCR / registry.librechat.ai, NOT docker.io/librechat/librechat-rag-api
+librechat__image_api: registry.librechat.ai/danny-avila/librechat-dev:latest
+librechat__image_rag_api: registry.librechat.ai/danny-avila/librechat-rag-api-dev-lite:latest
+librechat__image_mongodb: mongo:8.0.17
+librechat__image_meilisearch: getmeili/meilisearch:v1.35.1
+librechat__image_vectordb: pgvector/pgvector:0.8.0-pg15-trixie
+
+# Meilisearch master key (required for search/RAG - set in host_vars!)
+librechat__meili_master_key: "changeme-minimum-32-chars-required"
+
+# VectorDB (PostgreSQL + pgvector) - used by RAG API
+librechat__vectordb_db: mydatabase
+librechat__vectordb_user: myuser
+librechat__vectordb_password: mypassword
+
+# Container user (UID:GID). Uses docker_uid/docker_gid from bsmeding.docker when run first.
+librechat__container_uid: "{{ docker_uid | default(1000) }}"
+librechat__container_gid: "{{ docker_gid | default(1000) }}"
+
+# State (role: started = stack up, stopped = down; maps to docker_compose_v2 present/stopped)
+librechat__state: started  # started | stopped
+librechat__pull_images: true
+librechat__remove_existing: false  # Remove project before recreate
+librechat__remove_existing_home_dir: false  # ONLY FOR TESTS - DESTROYS ALL DATA!
+
+# Directories (relative to librechat__home)
+librechat__directories:
+  - path: "{{ librechat__home }}"
+    mode: "0755"
+  - path: "{{ librechat__home }}/images"
+    mode: "0755"
+  - path: "{{ librechat__home }}/uploads"
+    mode: "0755"
+  - path: "{{ librechat__home }}/logs"
+    mode: "0755"
+  - path: "{{ librechat__home }}/data-node"
+    mode: "0755"
+  - path: "{{ librechat__home }}/meili_data"
+    mode: "0755"
+
+# librechat.yaml (app expects /app/librechat.yaml in container)
+librechat__config_version: "1.3.6"
+
+# MCP (Model Context Protocol) — optional blocks in librechat.yaml
+# Docs: https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers
+# Smithery (discover/install MCPs): https://smithery.ai — paste YAML into librechat__mcp_servers or librechat__librechat_yaml_tail
+# Prefer list format; mapping format is still accepted for backward compatibility.
+# Example:
+# librechat__mcp_servers:
+#   - name: "nautobot"
+#     type: stdio
+#     command: "/usr/local/bin/nautobot-mcp-server"
+#     env:
+#       NAUTOBOT_URL: "https://cmdb.example.org"
+librechat__mcp_servers: []
+
+# SSRF / domain allowlist for remote MCP (often needed for host.docker.internal)
+librechat__mcp_settings: {}
+
+# UI permissions for MCP (maps to interface.mcpServers in librechat.yaml)
+librechat__interface_mcp_permissions: {}
+
+# Custom AI endpoints (LibreChat `endpoints.custom`)
+# Prefer list format (same shape as LibreChat `endpoints.custom`).
+# Backward compatibility: mapping format is still accepted.
+#
+# Example (put in group_vars/host_vars):
+# librechat__endpoints_custom:
+#   - name: "Ollama"
+#     apiKey: "ollama"
+#     baseURL: "http://host.docker.internal:11434/v1/"
+#     models:
+#       default: ["llama3:latest", "command-r", "mixtral", "phi3"]
+#       fetch: true
+#     titleConvo: true
+#     titleModel: "current_model"
+librechat__endpoints_custom:
+  - name: "Ollama"
+    apiKey: "ollama"
+    baseURL: "http://host.docker.internal:11434/v1/"
+    models:
+      default:
+        - "llama3:latest"
+        - "command-r"
+        - "mixtral"
+        - "phi3"
+      fetch: true
+    titleConvo: true
+    titleModel: "current_model"
+
+# Raw YAML appended to librechat.yaml (advanced: Smithery fragments, extra endpoints)
+librechat__librechat_yaml_tail: ""
+
+# Optional behavior:
+# - false (default): role fully templates librechat.yaml on each run
+# - true: if librechat.yaml is missing, create it once; then only edit a managed
+#   `endpoints.custom` block in-place so users can keep manual edits elsewhere.
+librechat__manage_endpoints_in_place: false
+
+# .env variables - for both docker-compose ${VAR} substitution and LibreChat app
+# See https://www.librechat.ai/docs/configuration/dotenv
+# UID, GID, PORT, RAG_PORT, MEILI_MASTER_KEY are set automatically from role vars
+#
+# JWT + CREDS are required or the API exits with "JwtStrategy requires a secret or key".
+# Defaults match upstream .env.example — override in host_vars / Ansible Vault for production.
+librechat__env:
+  HOST: "0.0.0.0"
+  DOMAIN_CLIENT: "http://localhost:{{ librechat__port }}"
+  DOMAIN_SERVER: "http://localhost:{{ librechat__port }}"
+  # First user: use Sign up on the login page — there is no default password (see README).
+  ALLOW_REGISTRATION: "true"
+  ALLOW_EMAIL_LOGIN: "true"
+  NO_INDEX: "true"
+  DEBUG_LOGGING: "false"
+  DEBUG_CONSOLE: "false"
+  MONGO_URI: "mongodb://mongodb:27017/LibreChat"
+  JWT_SECRET: "16f8c0ef4a5d391b26034086c628469d3f9f497f08163ab9b40137092f2909ef"
+  JWT_REFRESH_SECRET: "eaa5191f2914e30b9387fd84e254e4ba6fc51b4654968a9b0803b456a54b8418"
+  CREDS_KEY: "f34be427ebb29de8d88c107a71546019685ed8b241d8f2ed00c3df97ad2566f0"
+  CREDS_IV: "e2341419ec3dd3d19b13a1a87fafcbfb"
+
+# Extra env vars (merged last, for API keys and overrides)
+librechat__env_extra: {}
+
+# Firewall
+librechat__firewall_allow: false
+
+# Logging
+librechat__log_driver: json-file
+librechat__log_options:
+  max-size: "10M"
+  max-file: "5"

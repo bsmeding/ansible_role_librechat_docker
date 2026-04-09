@@ -1,0 +1,34 @@
+---
+dependencies: []
+
+galaxy_info:
+  role_name: librechat_docker
+  namespace: bsmeding
+  author: bsmeding
+  description: Deploy LibreChat (ChatGPT-style UI with multi-provider AI) via Docker Compose
+  company: "b@rtsmeding IT"
+  license: MIT
+  min_ansible_version: "2.10"
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+    - name: Fedora
+      versions:
+        - all
+    - name: Archlinux
+      versions:
+        - all
+  galaxy_tags:
+    - librechat
+    - chatgpt
+    - ai
+    - llm
+    - docker
+    - docker-compose

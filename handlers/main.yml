@@ -1,0 +1,8 @@
+---
+- name: Restart LibreChat
+  community.docker.docker_compose_v2:
+    project_src: "{{ librechat__home }}"
+    project_name: "{{ librechat__project_name }}"
+    state: restarted
+  when: librechat__state == 'started'
+  become: true

@@ -1,0 +1,51 @@
+---
+- name: Verify LibreChat Docker role
+  hosts: all
+  become: true
+  vars_files:
+    - ../../defaults/main.yml
+  tasks:
+    - name: Set molecule testing vars
+      ansible.builtin.set_fact:
+        librechat__port: 3080
+        librechat__name: librechat
+
+    - name: Check docker-compose.yml exists
+      ansible.builtin.stat:
+        path: "{{ librechat__home }}/docker-compose.yml"
+      register: compose_file
+
+    - name: Ensure docker-compose.yml exists
+      ansible.builtin.assert:
+        that: compose_file.stat.exists
+        fail_msg: "docker-compose.yml not found at {{ librechat__home }}"
+
+    - name: Check LibreChat API container is running
+      community.docker.docker_container_info:
+        name: LibreChat
+      register: librechat_container
+      retries: 60
+      delay: 10
+      until: librechat_container.exists | default(false) and librechat_container.container.State.Running | default(false)
+
+    - name: Assert LibreChat container is running
+      ansible.builtin.assert:
+        that:
+          - librechat_container.container.State.Running | default(false)
+        fail_msg: "LibreChat container is not running"
+
+    - name: Wait for LibreChat HTTP port
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: "{{ librechat__port }}"
+        state: started
+        timeout: 120
+        delay: 5
+
+    - name: Check LibreChat web UI responds
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ librechat__port }}/"
+        method: GET
+      register: librechat_web
+      failed_when: librechat_web.status not in [200, 301, 302]
+      changed_when: false

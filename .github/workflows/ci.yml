@@ -1,0 +1,70 @@
+---
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 6 * * 3"
+
+defaults:
+  run:
+    working-directory: .
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: pip3 install yamllint
+
+      - name: Lint code
+        run: yamllint .
+
+  molecule:
+    name: Molecule
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro:
+          - ubuntu2204
+          - ubuntu2404
+          - debian12
+          - debian13
+          - rockylinux9
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: pip3 install ansible molecule molecule-plugins[docker] docker netaddr
+
+      - name: Pull CICD image
+        run: docker pull bsmeding/ansible_cicd_${{ matrix.distro }}:latest
+
+      - name: Prep Molecule tmp dir
+        run: |
+          mkdir -p .molecule/ansible-tmp
+          chmod 777 .molecule/ansible-tmp
+
+      - name: Run Molecule tests
+        run: molecule test
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"
+          MOLECULE_DISTRO: ${{ matrix.distro }}

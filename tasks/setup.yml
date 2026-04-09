@@ -1,0 +1,170 @@
+---
+# LibreChat Docker Compose - setup tasks
+# Requires bsmeding.docker role. Uses community.docker collection.
+
+- name: Build merged env dict for .env template
+  ansible.builtin.set_fact:
+    librechat__env_merged: "{{ librechat__env | combine(librechat__domain_o, recursive=True) | combine({'PORT': librechat__port | string}, recursive=True) | combine(librechat__env_extra, recursive=True) }}"
+  vars:
+    librechat__domain_o: "{{ {'DOMAIN_CLIENT': librechat__public_url, 'DOMAIN_SERVER': librechat__public_url} if (librechat__public_url | default('') | trim | length > 0) else {} }}"
+
+- name: Initialize MCP servers map for librechat.yaml
+  ansible.builtin.set_fact:
+    librechat__mcp_servers_map: {}
+
+- name: Build MCP servers map for librechat.yaml (mapping format)
+  ansible.builtin.set_fact:
+    librechat__mcp_servers_map: "{{ librechat__mcp_servers_map | combine({item.key: (item.value | default({}))}, recursive=True) }}"
+  loop: "{{ ((librechat__mcp_servers | default({})) | dict2items) if ((librechat__mcp_servers | default([])) is mapping) else [] }}"
+
+- name: Build MCP servers map for librechat.yaml (list format)
+  ansible.builtin.set_fact:
+    librechat__mcp_servers_map: "{{ librechat__mcp_servers_map | combine({(item.name): librechat__mcp_server_cfg}, recursive=True) }}"
+  vars:
+    librechat__mcp_server_cfg: "{{ item | dict2items | rejectattr('key', 'equalto', 'name') | list | items2dict }}"
+  loop: "{{ (librechat__mcp_servers | default([])) if ((librechat__mcp_servers | default([])) is sequence and not ((librechat__mcp_servers | default([])) is string)) else [] }}"
+  when: item.name is defined
+
+- name: Initialize LibreChat custom endpoints list for librechat.yaml
+  ansible.builtin.set_fact:
+    librechat__endpoints_custom_list: []
+
+- name: Build LibreChat custom endpoints list for librechat.yaml (mapping format)
+  ansible.builtin.set_fact:
+    librechat__endpoints_custom_list: "{{ librechat__endpoints_custom_list + [ (item.value | default({})) | combine({'name': item.key}, recursive=True) ] }}"
+  loop: "{{ ((librechat__endpoints_custom | default({})) | dict2items) if ((librechat__endpoints_custom | default([])) is mapping) else [] }}"
+
+- name: Build LibreChat custom endpoints list for librechat.yaml (list format)
+  ansible.builtin.set_fact:
+    librechat__endpoints_custom_list: "{{ (librechat__endpoints_custom | default([])) }}"
+  when: (librechat__endpoints_custom | default([])) is sequence and not ((librechat__endpoints_custom | default([])) is string)
+
+- name: Ensure ENDPOINTS includes `custom` when custom endpoints are configured
+  ansible.builtin.set_fact:
+    librechat__env_merged: "{{ librechat__env_merged | combine({'ENDPOINTS': librechat__endpoints_env_value}, recursive=True) }}"
+  vars:
+    librechat__endpoints_env_current: "{{ (librechat__env_merged.ENDPOINTS | default('') | regex_replace('\\s+', '')) }}"
+    librechat__endpoints_env_value: >-
+      {{
+        'custom'
+        if (librechat__endpoints_env_current | length == 0)
+        else (
+          librechat__endpoints_env_current
+          if ((',custom,') in (',' ~ librechat__endpoints_env_current ~ ','))
+          else (librechat__endpoints_env_current ~ ',custom')
+        )
+      }}
+  when: (librechat__endpoints_custom_list | default([]) | length) > 0
+
+- name: Remove existing LibreChat Docker Compose project
+  community.docker.docker_compose_v2:
+    project_src: "{{ librechat__home }}"
+    state: absent
+  when: librechat__remove_existing
+  become: true
+
+- name: Remove home directory
+  ansible.builtin.file:
+    state: absent
+    path: "{{ librechat__home }}"
+  when: librechat__remove_existing_home_dir
+  become: true
+
+- name: Create directories
+  ansible.builtin.file:
+    state: directory
+    path: "{{ item.path }}"
+    mode: "{{ item.mode | default('0755') }}"
+    owner: "{{ item.owner | default(docker_uid) | default('root') }}"
+    group: "{{ item.group | default(docker_gid) | default('root') }}"
+  with_items: "{{ librechat__directories }}"
+  become: true
+
+- name: Deploy docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ librechat__home }}/docker-compose.yml"
+    mode: "0644"
+  notify: Restart LibreChat
+  become: true
+
+- name: Deploy librechat.yaml
+  ansible.builtin.template:
+    src: librechat.yaml.j2
+    dest: "{{ librechat__home }}/librechat.yaml"
+    mode: "0644"
+  notify: Restart LibreChat
+  become: true
+  when: not (librechat__manage_endpoints_in_place | default(false) | bool)
+
+- name: Create librechat.yaml if missing (in-place endpoints mode)
+  ansible.builtin.template:
+    src: librechat.yaml.j2
+    dest: "{{ librechat__home }}/librechat.yaml"
+    mode: "0644"
+    force: false
+  notify: Restart LibreChat
+  become: true
+  when: librechat__manage_endpoints_in_place | default(false) | bool
+
+- name: Update managed custom endpoints block in librechat.yaml
+  ansible.builtin.blockinfile:
+    path: "{{ librechat__home }}/librechat.yaml"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: LIBRECHAT ENDPOINTS"
+    block: "{{ lookup('template', 'librechat.endpoints.block.j2') }}"
+    insertafter: EOF
+    create: true
+    mode: "0644"
+  notify: Restart LibreChat
+  become: true
+  when: librechat__manage_endpoints_in_place | default(false) | bool
+
+- name: Deploy .env file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ librechat__home }}/.env"
+    mode: "0600"
+    owner: "{{ docker_uid | default(librechat__container_uid) | default('root') }}"
+    group: "{{ docker_gid | default(librechat__container_gid) | default('root') }}"
+  notify: Restart LibreChat
+  become: true
+
+- name: Allow LibreChat port in firewall
+  community.general.ufw:
+    rule: allow
+    port: "{{ librechat__port }}"
+    proto: tcp
+  when: librechat__firewall_allow | bool
+  become: true
+
+- name: Pull Docker images
+  community.docker.docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - "{{ librechat__image_api }}"
+    - "{{ librechat__image_mongodb }}"
+    - "{{ librechat__image_meilisearch }}"
+    - "{{ librechat__image_vectordb }}"
+    - "{{ librechat__image_rag_api }}"
+  when: librechat__pull_images
+  become: true
+
+- name: Start LibreChat Docker Compose stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ librechat__home }}"
+    project_name: "{{ librechat__project_name }}"
+    # docker_compose_v2 accepts absent, present, stopped, restarted — not "started"
+    state: present
+    pull: "{{ 'always' if librechat__pull_images else 'never' }}"
+  when: librechat__state == 'started'
+  become: true
+  notify: Restart LibreChat
+
+- name: Stop LibreChat Docker Compose stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ librechat__home }}"
+    project_name: "{{ librechat__project_name }}"
+    state: stopped
+  when: librechat__state == 'stopped'
+  become: true

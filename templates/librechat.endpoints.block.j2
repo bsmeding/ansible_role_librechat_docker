@@ -1,0 +1,8 @@
+{% if librechat__endpoints_custom_list | default([]) | length > 0 %}
+# Custom endpoints (LibreChat `endpoints.custom`)
+endpoints:
+  custom:
+{{ librechat__endpoints_custom_list | to_nice_yaml | indent(4, first=True) }}
+{% else %}
+# No managed custom endpoints configured.
+{% endif %}
