@@ -160,7 +160,7 @@
     pull: "{{ 'always' if librechat__pull_images else 'missing' }}"
   when: librechat__state == 'started'
   become: true
-  notify: Restart LibreChat
+  changed_when: false
 
 - name: Stop LibreChat Docker Compose stack
   community.docker.docker_compose_v2:
@@ -169,3 +169,4 @@
     state: stopped
   when: librechat__state == 'stopped'
   become: true
+  changed_when: false
