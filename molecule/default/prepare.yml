@@ -1,0 +1,33 @@
+---
+# bsmeding/ansible_cicd images mount the host Docker socket but often lack the Compose v2
+# CLI plugin inside the container. community.docker.docker_compose_v2 requires `docker compose`.
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Check whether docker compose works
+      ansible.builtin.command: docker compose version
+      register: librechat_compose_check
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Docker CLI plugins directory exists
+      ansible.builtin.file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: "0755"
+      when: librechat_compose_check.rc != 0
+
+    - name: Install Docker Compose v2 CLI plugin (static binary)
+      ansible.builtin.get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-{{ librechat_compose_dl_arch }}"
+        dest: /usr/local/lib/docker/cli-plugins/docker-compose
+        mode: "0755"
+        timeout: 120
+      vars:
+        librechat_compose_dl_arch: "{{ 'aarch64' if ansible_architecture in ['aarch64', 'arm64'] else 'x86_64' }}"
+      when: librechat_compose_check.rc != 0
+
+    - name: Assert docker compose is available
+      ansible.builtin.command: docker compose version
+      changed_when: false
