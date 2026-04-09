@@ -9,7 +9,8 @@
     librechat__meili_master_key: "molecule-test-meili-master-key-32chars"
     # Compose still pulls missing images (pull: missing); set true to force re-pull every run
     librechat__pull_images: false
-    librechat__remove_existing_home_dir: true  # Clean state for molecule
+    # Must be false: idempotence runs converge twice; true would remove /opt/librechat every time
+    librechat__remove_existing_home_dir: false
 
   pre_tasks:
     - name: Update apt cache
