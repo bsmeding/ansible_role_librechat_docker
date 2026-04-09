@@ -156,7 +156,8 @@
     project_name: "{{ librechat__project_name }}"
     # docker_compose_v2 accepts absent, present, stopped, restarted — not "started"
     state: present
-    pull: "{{ 'always' if librechat__pull_images else 'never' }}"
+    # missing: pull only if not local (never breaks clean hosts / Molecule when pull_images is false)
+    pull: "{{ 'always' if librechat__pull_images else 'missing' }}"
   when: librechat__state == 'started'
   become: true
   notify: Restart LibreChat
