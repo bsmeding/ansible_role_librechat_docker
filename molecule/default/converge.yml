@@ -17,5 +17,5 @@
       changed_when: false
 
   roles:
-    - role: bsmeding.docker
-    - role: ../../  # Role under test (ansible_role_librechat_docker)
+    # Docker daemon comes from mounted host socket in molecule.yml
+    - role: bsmeding.librechat_docker
