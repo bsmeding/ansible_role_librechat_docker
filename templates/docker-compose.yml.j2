@@ -21,10 +21,13 @@ services:
       - MEILI_HOST=http://meilisearch:7700
       - RAG_PORT={{ librechat__rag_port }}
       - RAG_API_URL=http://rag_api:{{ librechat__rag_port }}
+    # Use env_file (read by docker compose on the host running compose) — do not bind-mount .env.
+    # Bind mounts are resolved on the Docker *daemon* host; with a remote/socket daemon (e.g. Molecule)
+    # the file under librechat__home may not exist there and Docker can create a directory, breaking
+    # mounts onto /app/.env (file in the image).
+    env_file:
+      - "{{ librechat__home }}/.env"
     volumes:
-      - type: bind
-        source: "{{ librechat__home }}/.env"
-        target: /app/.env
       - "{{ librechat__home }}/librechat.yaml:/app/librechat.yaml:ro"
       - "{{ librechat__home }}/images:/app/client/public/images"
       - "{{ librechat__home }}/uploads:/app/uploads"
