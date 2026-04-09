@@ -24,4 +24,3 @@ provisioner:
   config_options:
     defaults:
       remote_tmp: /tmp/.ansible
-      roles_path: ../..

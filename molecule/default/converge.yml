@@ -1,4 +1,6 @@
 ---
+# Role root = two levels above this file (molecule/default -> repo root).
+# import_role avoids Galaxy name resolution and works with `ansible-playbook --syntax-check` in CI.
 - name: Converge
   hosts: all
 
@@ -16,6 +18,8 @@
       when: ansible_facts.os_family == 'Debian'
       changed_when: false
 
-  roles:
-    # Docker daemon comes from mounted host socket in molecule.yml
-    - role: bsmeding.librechat_docker
+  tasks:
+    - name: Apply librechat_docker role under test
+      ansible.builtin.import_role:
+        name: "{{ playbook_dir | dirname | dirname }}"
+      # Docker daemon: host socket mounted in molecule.yml
