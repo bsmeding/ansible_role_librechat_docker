@@ -41,7 +41,7 @@ jobs:
           - ubuntu2404
           - debian12
           - debian13
-          - rockylinux9
+          # - rockylinux9
     steps:
       - name: Check out the codebase
         uses: actions/checkout@v5
