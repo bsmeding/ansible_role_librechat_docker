@@ -4,7 +4,13 @@
 
 - name: Build merged env dict for .env template
   ansible.builtin.set_fact:
-    librechat__env_merged: "{{ librechat__env | combine(librechat__domain_o, recursive=True) | combine({'PORT': librechat__port | string}, recursive=True) | combine(librechat__env_extra, recursive=True) }}"
+    librechat__env_merged: >-
+      {{
+        librechat__env
+        | combine(librechat__domain_o, recursive=True)
+        | combine({'PORT': librechat__port | string}, recursive=True)
+        | combine(librechat__env_extra, recursive=True)
+      }}
   vars:
     librechat__domain_o: "{{ {'DOMAIN_CLIENT': librechat__public_url, 'DOMAIN_SERVER': librechat__public_url} if (librechat__public_url | default('') | trim | length > 0) else {} }}"
 
@@ -75,8 +81,8 @@
     state: directory
     path: "{{ item.path }}"
     mode: "{{ item.mode | default('0755') }}"
-    owner: "{{ item.owner | default(docker_uid) | default('root') }}"
-    group: "{{ item.group | default(docker_gid) | default('root') }}"
+    owner: "{{ item.owner | default(docker_uid) | default(librechat__container_uid) | default('root') }}"
+    group: "{{ item.group | default(docker_gid) | default(librechat__container_gid) | default('root') }}"
   with_items: "{{ librechat__directories }}"
   become: true
 

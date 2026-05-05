@@ -1,0 +1,28 @@
+---
+- name: Cleanup LibreChat Docker Molecule resources
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars:
+    molecule_librechat_home: "/tmp/molecule-librechat-{{ lookup('env', 'MOLECULE_DISTRO') | default('default', true) }}"
+    librechat__project_name: librechat
+  tasks:
+    - name: Check Molecule LibreChat compose file
+      ansible.builtin.stat:
+        path: "{{ molecule_librechat_home }}/docker-compose.yml"
+      register: molecule_librechat_compose
+
+    - name: Remove Molecule LibreChat compose stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ molecule_librechat_home }}"
+        project_name: "{{ librechat__project_name }}"
+        state: absent
+      failed_when: false
+      when: molecule_librechat_compose.stat.exists
+
+    - name: Remove Molecule LibreChat shared directory
+      ansible.builtin.file:
+        path: "{{ molecule_librechat_home }}"
+        state: absent
+      failed_when: false

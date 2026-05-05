@@ -13,6 +13,9 @@ platforms:
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - /var/run/docker.sock:/var/run/docker.sock
+      # Compose bind mounts resolve on the Docker daemon host, so share the
+      # project directory between the Molecule instance and the runner.
+      - /tmp/molecule-librechat-${MOLECULE_DISTRO:-default}:/tmp/molecule-librechat-${MOLECULE_DISTRO:-default}:rw
     cgroupns_mode: host
     privileged: true
     pre_build_image: true
@@ -21,6 +24,7 @@ provisioner:
   playbooks:
     prepare: prepare.yml
     converge: ${MOLECULE_PLAYBOOK:-converge.yml}
+    cleanup: cleanup.yml
     verify: ${MOLECULE_PLAYBOOK_VERIFY:-verify.yml}
   config_options:
     defaults:

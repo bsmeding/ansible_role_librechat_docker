@@ -2,11 +2,14 @@
 - name: Verify LibreChat Docker role
   hosts: all
   become: true
+  vars:
+    molecule_librechat_home: "/tmp/molecule-librechat-{{ lookup('env', 'MOLECULE_DISTRO') | default('default', true) }}"
   vars_files:
     - ../../defaults/main.yml
   tasks:
     - name: Set molecule testing vars
       ansible.builtin.set_fact:
+        librechat__home: "{{ molecule_librechat_home }}"
         librechat__port: 3080
         librechat__name: librechat
 
@@ -27,12 +30,26 @@
       retries: 60
       delay: 10
       until: librechat_container.exists | default(false) and librechat_container.container.State.Running | default(false)
+      failed_when: false
+      changed_when: false
+
+    - name: Gather LibreChat logs when container is not running
+      ansible.builtin.command: docker logs --tail 200 LibreChat
+      register: librechat_container_logs
+      changed_when: false
+      failed_when: false
+      when: not (librechat_container.exists | default(false) and librechat_container.container.State.Running | default(false))
 
     - name: Assert LibreChat container is running
       ansible.builtin.assert:
         that:
+          - librechat_container.exists | default(false)
           - librechat_container.container.State.Running | default(false)
-        fail_msg: "LibreChat container is not running"
+        fail_msg: >-
+          LibreChat container is not running.
+          State={{ librechat_container.container.State.Status | default('missing') }}.
+          Recent logs:
+          {{ (librechat_container_logs.stdout | default('No logs available'))[:4000] }}
 
     # Do not probe the published host port from the runner: Docker can accept TCP on
     # localhost:3080 then reset HTTP (hairpin / proxy quirks). Hit the API from inside
