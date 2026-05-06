@@ -164,4 +164,4 @@ Alternatives: `registry.librechat.ai/danny-avila/librechat-rag-api-dev-lite:late
 
 ## License
 
-MIT
+Apache-2.0

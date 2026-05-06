@@ -7,7 +7,7 @@ galaxy_info:
   author: bsmeding
   description: Deploy LibreChat (ChatGPT-style UI with multi-provider AI) via Docker Compose
   company: "b@rtsmeding IT"
-  license: MIT
+  license: Apache-2.0
   min_ansible_version: "2.10"
   platforms:
     - name: Debian
