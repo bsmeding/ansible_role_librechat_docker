@@ -21,7 +21,13 @@ librechat__project_name: librechat
 # Images — RAG API is on GHCR / registry.librechat.ai, NOT docker.io/librechat/librechat-rag-api
 librechat__image_api: registry.librechat.ai/danny-avila/librechat-dev:latest
 librechat__image_rag_api: registry.librechat.ai/danny-avila/librechat-rag-api-dev-lite:latest
-librechat__image_mongodb: mongo:8.0.17
+
+# MongoDB: official docker.io mongo 5.0+ on linux/amd64 requires CPU AVX (MongoDB SERVER-54407). There is no supported
+# way to run those images on a non-AVX host. Set librechat__mongodb_cpu_without_avx: true to use MongoDB 4.4 instead
+# (last line without that requirement). You cannot reuse WiredTiger data from Mongo 8 after switching to 4.4 — use a
+# fresh {{ librechat__home }}/data-node or run Mongo on AVX-capable hardware. Override librechat__image_mongodb to pin any tag explicitly.
+librechat__mongodb_cpu_without_avx: false
+librechat__image_mongodb: "{{ 'mongo:4.4.29' if (librechat__mongodb_cpu_without_avx | bool) else 'mongo:8.0.17' }}"
 librechat__image_meilisearch: getmeili/meilisearch:v1.35.1
 librechat__image_vectordb: pgvector/pgvector:0.8.0-pg15-trixie
 

@@ -2,14 +2,24 @@
 # Source: https://github.com/danny-avila/LibreChat
 # Do not edit directly; use host_vars/group_vars to override.
 
+networks:
+  librechat_net:
+    driver: bridge
+
 services:
   api:
     container_name: LibreChat
+    networks:
+      - librechat_net
     ports:
       - "{{ librechat__port }}:{{ librechat__port }}"
     depends_on:
-      - mongodb
-      - rag_api
+      mongodb:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      rag_api:
+        condition: service_started
     image: "{{ librechat__image_api }}"
     restart: always
     user: "{{ librechat__container_uid }}:{{ librechat__container_gid }}"
@@ -38,18 +48,30 @@ services:
 
   mongodb:
     container_name: chat-mongodb
+    networks:
+      - librechat_net
     image: "{{ librechat__image_mongodb }}"
     restart: always
     user: "{{ librechat__container_uid }}:{{ librechat__container_gid }}"
     volumes:
       - "{{ librechat__home }}/data-node:/data/db"
     command: mongod --noauth
+    healthcheck:
+      # mongo:4.4: legacy `mongo` client. 5.0+: `mongosh`. Try `mongo` first so a slow/hanging `mongosh` on 4.4 does not
+      # burn the whole healthcheck timeout before the fallback runs. Explicit TCP avoids socket/path quirks with `user:`.
+      test: ["CMD-SHELL", "mongo --quiet --host 127.0.0.1 --port 27017 --eval 'db.runCommand({ ping: 1 })' >/dev/null 2>&1 || mongosh --quiet --host 127.0.0.1 --port 27017 --eval 'db.runCommand({ ping: 1 })' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 18
+      start_period: 60s
     logging:
       driver: "{{ librechat__log_driver }}"
       options: {{ librechat__log_options | to_nice_json }}
 
   meilisearch:
     container_name: chat-meilisearch
+    networks:
+      - librechat_net
     image: "{{ librechat__image_meilisearch }}"
     restart: always
     user: "{{ librechat__container_uid }}:{{ librechat__container_gid }}"
@@ -59,12 +81,20 @@ services:
       - MEILI_MASTER_KEY={{ librechat__meili_master_key }}
     volumes:
       - "{{ librechat__home }}/meili_data:/meili_data"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7700/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     logging:
       driver: "{{ librechat__log_driver }}"
       options: {{ librechat__log_options | to_nice_json }}
 
   vectordb:
     container_name: vectordb
+    networks:
+      - librechat_net
     image: "{{ librechat__image_vectordb }}"
     environment:
       POSTGRES_DB: "{{ librechat__vectordb_db }}"
@@ -73,19 +103,28 @@ services:
     restart: always
     volumes:
       - librechat_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ librechat__vectordb_user | quote }} -d {{ librechat__vectordb_db | quote }}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     logging:
       driver: "{{ librechat__log_driver }}"
       options: {{ librechat__log_options | to_nice_json }}
 
   rag_api:
     container_name: rag_api
+    networks:
+      - librechat_net
     image: "{{ librechat__image_rag_api }}"
     environment:
       - DB_HOST=vectordb
       - RAG_PORT={{ librechat__rag_port }}
     restart: always
     depends_on:
-      - vectordb
+      vectordb:
+        condition: service_healthy
     env_file:
       - "{{ librechat__home }}/.env"
     logging:

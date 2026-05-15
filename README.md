@@ -8,6 +8,7 @@ Based on the [official docker-compose.yml](https://github.com/danny-avila/LibreC
 
 - Docker with Docker Compose plugin (via `bsmeding.docker` role)
 - `community.docker` and `community.general` collections
+- **CPU / MongoDB:** The default `mongo:8.x` image needs **AVX** on `linux/amd64`. Hosts without AVX (many older Intel Pentiums, some VMs) must set **`librechat__mongodb_cpu_without_avx: true`** so the role uses **`mongo:4.4.29`**, or point **`librechat__image_mongodb`** at Mongo running elsewhere on AVX-capable hardware. There is no role change that makes upstream Mongo 5+ binaries run without AVX; see [SERVER-54407](https://jira.mongodb.org/browse/SERVER-54407) and [LibreChat MongoDB notes](https://www.librechat.ai/docs/user_guides/mongodb). The MongoDB container healthcheck uses **`mongo` (legacy) first, then `mongosh`**, with explicit **`127.0.0.1:27017`**, so **4.4** images are not blocked by a slow or misbehaving `mongosh` hitting the Docker healthcheck timeout before the fallback runs.
 
 ## Role Variables
 
@@ -20,6 +21,8 @@ Based on the [official docker-compose.yml](https://github.com/danny-avila/LibreC
 | `librechat__rag_port` | `8000` | RAG API port |
 | `librechat__image_api` | `registry.librechat.ai/.../librechat-dev:latest` | Main API image |
 | `librechat__image_rag_api` | `registry.librechat.ai/.../librechat-rag-api-dev-lite:latest` | RAG API image |
+| `librechat__image_mongodb` | `mongo:8.0.17` or `mongo:4.4.29` | MongoDB image; default is **8.0.17** unless `librechat__mongodb_cpu_without_avx` is `true` (see Requirements). Override to pin any tag. |
+| `librechat__mongodb_cpu_without_avx` | `false` | If `true`, use **`mongo:4.4.29`** for hosts **without AVX** (cannot reuse data created by Mongo 8+). |
 | `librechat__meili_master_key` | `changeme-minimum-32-chars-required` | Meilisearch master key (**must change** in production) |
 | `librechat__config_version` | `1.3.6` | `version` in `librechat.yaml` (see [librechat_yaml](https://www.librechat.ai/docs/configuration/librechat_yaml)) |
 | `librechat__env` | (see `defaults/main.yml`) | Includes `JWT_*`, `CREDS_*` — **rotate for production** (Vault recommended) |
@@ -132,6 +135,8 @@ Behavior:
 
 ```yaml
 librechat__port: 3080
+# CPU without AVX (older Intel / some VMs): use Mongo 4.4; needs fresh data-node if you ever ran Mongo 8+ here
+# librechat__mongodb_cpu_without_avx: true
 # Match the URL you type in the browser (not localhost when using LAN IP):
 # librechat__public_url: "http://192.168.1.50:3080"
 librechat__meili_master_key: "your-secure-32-char-key-here"
